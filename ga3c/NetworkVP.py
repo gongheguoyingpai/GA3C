@@ -83,19 +83,26 @@ class NetworkVP:
 
         flatten_input_shape = _input.get_shape()
         nb_elements = flatten_input_shape[1] * flatten_input_shape[2] * flatten_input_shape[3]
-
+        # 将卷积后的网络展开为一维作为全连接层的输入
         self.flat = tf.reshape(_input, shape=[-1, nb_elements._value])
+        # 第一个全连接层，神经元个数为256
         self.d1 = self.dense_layer(self.flat, 256, 'dense1')
 
+        # Critic自有的全连接层, 神经元个数为1个，未使用激活函数
         self.logits_v = tf.squeeze(self.dense_layer(self.d1, 1, 'logits_v', func=None), axis=[1])
+        # Critic的Loss为预测值与reward之前的均方误差
         self.cost_v = 0.5 * tf.reduce_sum(tf.square(self.y_r - self.logits_v), axis=0)
 
+        # Actor网络自有的全连接层，神经元个数与Action的个数相等，未使用激活函数
         self.logits_p = self.dense_layer(self.d1, self.num_actions, 'logits_p', func=None)
         if Config.USE_LOG_SOFTMAX:
+            # 计算SoftMax
             self.softmax_p = tf.nn.softmax(self.logits_p)
+            # 对SoftMax取Log
             self.log_softmax_p = tf.nn.log_softmax(self.logits_p)
             self.log_selected_action_prob = tf.reduce_sum(self.log_softmax_p * self.action_index, axis=1)
-
+            
+            # 这里加入stop_gradient函数后就不会在actor网络中去更新critic中的output进行反向传播
             self.cost_p_1 = self.log_selected_action_prob * (self.y_r - tf.stop_gradient(self.logits_v))
             self.cost_p_2 = -1 * self.var_beta * \
                         tf.reduce_sum(self.log_softmax_p * self.softmax_p, axis=1)
